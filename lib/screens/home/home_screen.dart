@@ -92,6 +92,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     ref.invalidate(favoritesNotifierProvider);
     ref.invalidate(connectivityStreamProvider);
     
+    // 🔥 RAFRAÎCHIR LES PERMISSIONS ET LE RÔLE
+    ref.read(permissionsProvider.notifier).refresh();
+    ref.invalidate(userRoleProvider);
+    
     print('✅ Providers invalidés - Rechargement en cours...');
   }
 
