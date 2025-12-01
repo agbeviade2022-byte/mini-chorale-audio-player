@@ -7,11 +7,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 class AdminApiService {
   final SupabaseClient _supabase = Supabase.instance.client;
   
-  // URL de l'API Dashboard (à configurer selon l'environnement)
-  // En production, utiliser l'URL de votre dashboard déployé
+  // URL de l'API Dashboard
   static const String _apiBaseUrl = String.fromEnvironment(
     'ADMIN_API_URL',
-    defaultValue: 'https://votre-dashboard.vercel.app', // Remplacer par votre URL
+    defaultValue: 'https://admin-chorale-dashboard.vercel.app',
   );
 
   /// Créer un nouveau membre avec compte Auth complet
