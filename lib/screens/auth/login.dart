@@ -13,7 +13,10 @@ import 'package:mini_chorale_audio_player/screens/auth/otp_verification_screen.d
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
-  const LoginScreen({super.key});
+  /// Email pré-rempli (optionnel) - si fourni, le champ email sera grisé
+  final String? prefilledEmail;
+  
+  const LoginScreen({super.key, this.prefilledEmail});
 
   @override
   ConsumerState<LoginScreen> createState() => _LoginScreenState();
@@ -29,6 +32,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   String? _passwordError; // message d'erreur spécifique au champ mot de passe
   bool _emailChecked = false;
   bool _emailValidated = false;
+  
+  /// Indique si l'email est verrouillé (pré-rempli par un admin)
+  bool get _isEmailLocked => widget.prefilledEmail != null && widget.prefilledEmail!.isNotEmpty;
+
+  @override
+  void initState() {
+    super.initState();
+    // Si un email est pré-rempli, le définir et valider automatiquement
+    if (_isEmailLocked) {
+      _emailController.text = widget.prefilledEmail!;
+      // Valider l'email automatiquement après le build
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _checkEmailAndShowPassword();
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -253,9 +272,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           TextFormField(
                             controller: _emailController,
                             keyboardType: TextInputType.emailAddress,
-                            decoration: const InputDecoration(
+                            readOnly: _isEmailLocked, // Verrouillé si pré-rempli
+                            enabled: !_isEmailLocked, // Grisé si pré-rempli
+                            style: _isEmailLocked 
+                                ? TextStyle(color: Colors.grey[600])
+                                : null,
+                            decoration: InputDecoration(
                               labelText: 'Email',
-                              prefixIcon: Icon(Icons.email),
+                              prefixIcon: const Icon(Icons.email),
+                              suffixIcon: _isEmailLocked 
+                                  ? const Icon(Icons.lock, color: Colors.grey, size: 20)
+                                  : null,
+                              filled: _isEmailLocked,
+                              fillColor: _isEmailLocked ? Colors.grey[200] : null,
                             ),
                             validator: (value) {
                               if (_emailError != null) {
