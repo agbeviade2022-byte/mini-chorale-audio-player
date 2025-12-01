@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:mini_chorale_audio_player/screens/admin/add_member_screen.dart';
 
 /// Écran de gestion des utilisateurs (Super Admin uniquement)
 class UsersManagementScreen extends ConsumerStatefulWidget {
@@ -18,6 +19,7 @@ class _UsersManagementScreenState extends ConsumerState<UsersManagementScreen> {
   String _searchQuery = '';
   bool _isSuperAdmin = false;
   String? _adminChoraleId;
+  bool _canAddMembers = false;
 
   @override
   void initState() {
@@ -45,6 +47,17 @@ class _UsersManagementScreenState extends ConsumerState<UsersManagementScreen> {
       
       _isSuperAdmin = myRole == 'super_admin';
       _adminChoraleId = myChoraleId;
+
+      var canAddMembers = _isSuperAdmin;
+      if (!canAddMembers) {
+        final addPermission = await _supabase
+            .from('user_permissions')
+            .select('module_code')
+            .eq('user_id', userId)
+            .eq('module_code', 'add_members')
+            .maybeSingle();
+        canAddMembers = addPermission != null;
+      }
       
       print('👤 Mon rôle: $myRole, Ma chorale: $myChoraleId');
       
@@ -84,6 +97,7 @@ class _UsersManagementScreenState extends ConsumerState<UsersManagementScreen> {
       setState(() {
         _users = List<Map<String, dynamic>>.from(usersData);
         _chorales = List<Map<String, dynamic>>.from(choralesData);
+        _canAddMembers = canAddMembers;
         _isLoading = false;
       });
       
@@ -286,6 +300,22 @@ class _UsersManagementScreenState extends ConsumerState<UsersManagementScreen> {
           ),
         ],
       ),
+      floatingActionButton: _canAddMembers
+          ? FloatingActionButton.extended(
+              onPressed: () async {
+                await Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const AddMemberScreen(),
+                  ),
+                );
+                if (mounted) {
+                  _loadData();
+                }
+              },
+              icon: const Icon(Icons.person_add),
+              label: const Text('Ajouter'),
+            )
+          : null,
       body: Column(
         children: [
           // Barre de recherche

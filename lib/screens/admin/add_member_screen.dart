@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:mini_chorale_audio_player/services/otp_auth_service.dart';
+import 'package:mini_chorale_audio_player/services/admin_api_service.dart';
 import 'package:mini_chorale_audio_player/providers/auth_provider.dart';
 
 /// Écran pour ajouter un nouveau membre
@@ -16,6 +18,7 @@ class AddMemberScreen extends ConsumerStatefulWidget {
 class _AddMemberScreenState extends ConsumerState<AddMemberScreen> {
   final _formKey = GlobalKey<FormState>();
   final _otpService = OtpAuthService();
+  final _adminApiService = AdminApiService();
   final _supabase = Supabase.instance.client;
 
   final _fullNameController = TextEditingController();
@@ -27,6 +30,8 @@ class _AddMemberScreenState extends ConsumerState<AddMemberScreen> {
   bool _isLoading = false;
   String? _errorMessage;
   String? _successMessage;
+  String? _temporaryPassword;
+  bool _sendInvitation = true; // Par défaut, envoyer une invitation
 
   List<Map<String, dynamic>> _chorales = [];
   bool _isSuperAdmin = false;
@@ -97,39 +102,35 @@ class _AddMemberScreenState extends ConsumerState<AddMemberScreen> {
     }
   }
 
-  /// Créer un nouveau membre
+  /// Créer un nouveau membre avec compte Auth complet
   Future<void> _createMember() async {
     if (!_formKey.currentState!.validate()) return;
-
-    final currentUser = _otpService.getCurrentUser();
-    if (currentUser == null) {
-      setState(() {
-        _errorMessage = 'Vous devez être connecté';
-      });
-      return;
-    }
 
     setState(() {
       _isLoading = true;
       _errorMessage = null;
       _successMessage = null;
+      _temporaryPassword = null;
     });
 
     try {
-      final result = await _otpService.createMember(
-        fullName: _fullNameController.text.trim(),
+      final result = await _adminApiService.createMemberWithAuth(
         email: _emailController.text.trim().toLowerCase(),
-        phone: _phoneController.text.trim().isEmpty
+        fullName: _fullNameController.text.trim(),
+        telephone: _phoneController.text.trim().isEmpty
             ? null
             : _phoneController.text.trim(),
         role: _selectedRole,
         choraleId: _selectedChoraleId,
-        adminId: currentUser.id,
+        sendInvitation: _sendInvitation,
       );
 
       if (result['success'] == true) {
+        final tempPassword = result['temporary_password'] as String?;
+        
         setState(() {
           _successMessage = result['message'];
+          _temporaryPassword = tempPassword;
         });
 
         // Effacer le formulaire
@@ -138,7 +139,9 @@ class _AddMemberScreenState extends ConsumerState<AddMemberScreen> {
         _phoneController.clear();
         setState(() {
           _selectedRole = 'membre';
-          _selectedChoraleId = null;
+          if (_isSuperAdmin) {
+            _selectedChoraleId = null;
+          }
         });
 
         // Afficher un snackbar
@@ -147,6 +150,7 @@ class _AddMemberScreenState extends ConsumerState<AddMemberScreen> {
             SnackBar(
               content: Text(result['message']),
               backgroundColor: Colors.green,
+              duration: const Duration(seconds: 4),
             ),
           );
         }
@@ -367,6 +371,30 @@ class _AddMemberScreenState extends ConsumerState<AddMemberScreen> {
                       ],
                     ),
                   ),
+                const SizedBox(height: 16),
+
+                // Option d'invitation
+                Card(
+                  child: SwitchListTile(
+                    title: const Text('Envoyer une invitation par email'),
+                    subtitle: Text(
+                      _sendInvitation 
+                          ? 'Le membre recevra un email pour définir son mot de passe'
+                          : 'Un mot de passe temporaire sera généré',
+                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                    ),
+                    value: _sendInvitation,
+                    onChanged: (value) {
+                      setState(() {
+                        _sendInvitation = value;
+                      });
+                    },
+                    secondary: Icon(
+                      _sendInvitation ? Icons.email : Icons.password,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                ),
                 const SizedBox(height: 24),
 
                 // Messages
@@ -376,6 +404,12 @@ class _AddMemberScreenState extends ConsumerState<AddMemberScreen> {
                 ],
                 if (_successMessage != null) ...[
                   _buildSuccessMessage(_successMessage!),
+                  const SizedBox(height: 16),
+                ],
+                
+                // Afficher le mot de passe temporaire si généré
+                if (_temporaryPassword != null) ...[
+                  _buildPasswordCard(_temporaryPassword!),
                   const SizedBox(height: 16),
                 ],
 
@@ -464,6 +498,79 @@ class _AddMemberScreenState extends ConsumerState<AddMemberScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// Carte avec le mot de passe temporaire (copiable)
+  Widget _buildPasswordCard(String password) {
+    return Card(
+      color: Colors.orange[50],
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.vpn_key, color: Colors.orange[700]),
+                const SizedBox(width: 8),
+                Text(
+                  'Mot de passe temporaire',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.orange[700],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.orange[200]!),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      password,
+                      style: const TextStyle(
+                        fontFamily: 'monospace',
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 2,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.copy),
+                    onPressed: () {
+                      Clipboard.setData(ClipboardData(text: password));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Mot de passe copié !'),
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                    },
+                    tooltip: 'Copier',
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '⚠️ Communiquez ce mot de passe au membre de façon sécurisée. Il devra le changer à sa première connexion.',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.orange[800],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
