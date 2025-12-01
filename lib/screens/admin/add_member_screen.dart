@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:mini_chorale_audio_player/services/otp_auth_service.dart';
 import 'package:mini_chorale_audio_player/providers/auth_provider.dart';
 
@@ -15,6 +16,7 @@ class AddMemberScreen extends ConsumerStatefulWidget {
 class _AddMemberScreenState extends ConsumerState<AddMemberScreen> {
   final _formKey = GlobalKey<FormState>();
   final _otpService = OtpAuthService();
+  final _supabase = Supabase.instance.client;
 
   final _fullNameController = TextEditingController();
   final _emailController = TextEditingController();
@@ -27,11 +29,14 @@ class _AddMemberScreenState extends ConsumerState<AddMemberScreen> {
   String? _successMessage;
 
   List<Map<String, dynamic>> _chorales = [];
+  bool _isSuperAdmin = false;
+  String? _adminChoraleId;
+  String? _adminChoraleName;
 
   @override
   void initState() {
     super.initState();
-    _loadChorales();
+    _loadData();
   }
 
   @override
@@ -42,20 +47,53 @@ class _AddMemberScreenState extends ConsumerState<AddMemberScreen> {
     super.dispose();
   }
 
-  /// Charger la liste des chorales
-  Future<void> _loadChorales() async {
+  /// Charger les données (profil admin + chorales)
+  Future<void> _loadData() async {
     try {
-      final supabase = _otpService._supabase;
-      final response = await supabase
-          .from('chorales')
-          .select('id, nom')
-          .order('nom');
+      // 1. Récupérer le profil de l'utilisateur connecté
+      final userId = _supabase.auth.currentUser?.id;
+      if (userId == null) return;
+      
+      final myProfile = await _supabase
+          .from('profiles')
+          .select('role, chorale_id, chorales(nom)')
+          .eq('user_id', userId)
+          .single();
+      
+      final myRole = myProfile['role'] as String?;
+      final myChoraleId = myProfile['chorale_id'] as String?;
+      final myChoraleName = myProfile['chorales']?['nom'] as String?;
+      
+      _isSuperAdmin = myRole == 'super_admin';
+      _adminChoraleId = myChoraleId;
+      _adminChoraleName = myChoraleName;
+      
+      print('👤 AddMember - Mon rôle: $myRole, Ma chorale: $myChoraleId');
+      
+      // 2. Charger les chorales (filtrées si admin)
+      List<dynamic> choralesData;
+      if (_isSuperAdmin) {
+        choralesData = await _supabase
+            .from('chorales')
+            .select('id, nom')
+            .order('nom');
+      } else if (myChoraleId != null) {
+        // Admin voit uniquement sa chorale
+        choralesData = await _supabase
+            .from('chorales')
+            .select('id, nom')
+            .eq('id', myChoraleId);
+        // Pré-sélectionner la chorale de l'admin
+        _selectedChoraleId = myChoraleId;
+      } else {
+        choralesData = [];
+      }
 
       setState(() {
-        _chorales = List<Map<String, dynamic>>.from(response);
+        _chorales = List<Map<String, dynamic>>.from(choralesData);
       });
     } catch (e) {
-      print('❌ Erreur chargement chorales: $e');
+      print('❌ Erreur chargement données: $e');
     }
   }
 
@@ -227,7 +265,7 @@ class _AddMemberScreenState extends ConsumerState<AddMemberScreen> {
                 ),
                 const SizedBox(height: 16),
 
-                // Rôle
+                // Rôle (limité pour les admins)
                 DropdownButtonFormField<String>(
                   value: _selectedRole,
                   decoration: InputDecoration(
@@ -237,19 +275,22 @@ class _AddMemberScreenState extends ConsumerState<AddMemberScreen> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  items: const [
-                    DropdownMenuItem(
+                  items: [
+                    const DropdownMenuItem(
                       value: 'membre',
                       child: Text('Membre'),
                     ),
-                    DropdownMenuItem(
-                      value: 'admin',
-                      child: Text('Admin (Gestionnaire de chorale)'),
-                    ),
-                    DropdownMenuItem(
-                      value: 'super_admin',
-                      child: Text('Super Admin'),
-                    ),
+                    // Seul super_admin peut créer des admins
+                    if (_isSuperAdmin) ...[
+                      const DropdownMenuItem(
+                        value: 'admin',
+                        child: Text('Admin (Gestionnaire de chorale)'),
+                      ),
+                      const DropdownMenuItem(
+                        value: 'super_admin',
+                        child: Text('Super Admin'),
+                      ),
+                    ],
                   ],
                   onChanged: (value) {
                     setState(() {
@@ -259,34 +300,73 @@ class _AddMemberScreenState extends ConsumerState<AddMemberScreen> {
                 ),
                 const SizedBox(height: 16),
 
-                // Chorale
-                DropdownButtonFormField<String>(
-                  value: _selectedChoraleId,
-                  decoration: InputDecoration(
-                    labelText: 'Chorale (optionnel)',
-                    prefixIcon: const Icon(Icons.groups_outlined),
-                    border: OutlineInputBorder(
+                // Chorale (verrouillée pour les admins)
+                if (_isSuperAdmin)
+                  DropdownButtonFormField<String>(
+                    value: _selectedChoraleId,
+                    decoration: InputDecoration(
+                      labelText: 'Chorale (optionnel)',
+                      prefixIcon: const Icon(Icons.groups_outlined),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    items: [
+                      const DropdownMenuItem(
+                        value: null,
+                        child: Text('Aucune chorale'),
+                      ),
+                      ..._chorales.map((chorale) {
+                        return DropdownMenuItem(
+                          value: chorale['id'],
+                          child: Text(chorale['nom']),
+                        );
+                      }),
+                    ],
+                    onChanged: (value) {
+                      setState(() {
+                        _selectedChoraleId = value;
+                      });
+                    },
+                  )
+                else
+                  // Admin: chorale verrouillée sur sa propre chorale
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey[400]!),
                       borderRadius: BorderRadius.circular(12),
+                      color: Colors.grey[100],
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.groups_outlined, color: Colors.grey[600]),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Chorale',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                              Text(
+                                _adminChoraleName ?? 'Ma chorale',
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Icon(Icons.lock, size: 16, color: Colors.grey[500]),
+                      ],
                     ),
                   ),
-                  items: [
-                    const DropdownMenuItem(
-                      value: null,
-                      child: Text('Aucune chorale'),
-                    ),
-                    ..._chorales.map((chorale) {
-                      return DropdownMenuItem(
-                        value: chorale['id'],
-                        child: Text(chorale['nom']),
-                      );
-                    }),
-                  ],
-                  onChanged: (value) {
-                    setState(() {
-                      _selectedChoraleId = value;
-                    });
-                  },
-                ),
                 const SizedBox(height: 24),
 
                 // Messages

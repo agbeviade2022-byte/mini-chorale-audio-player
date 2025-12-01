@@ -22,6 +22,7 @@ import 'package:mini_chorale_audio_player/screens/admin/edit_chant.dart';
 import 'package:mini_chorale_audio_player/screens/admin/chorales_management_screen_v2.dart';
 import 'package:mini_chorale_audio_player/screens/admin/members_validation_screen.dart';
 import 'package:mini_chorale_audio_player/screens/admin/users_management_screen.dart';
+import 'package:mini_chorale_audio_player/screens/admin/add_member_screen.dart';
 import 'package:mini_chorale_audio_player/providers/favorites_provider.dart';
 import 'package:mini_chorale_audio_player/providers/theme_provider.dart';
 import 'package:mini_chorale_audio_player/providers/listening_history_provider.dart';
@@ -1601,6 +1602,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                         Navigator.of(context).push(
                           MaterialPageRoute(
                             builder: (context) => const UsersManagementScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  
+                  // Ajouter un Membre (permission add_members)
+                  PermissionGuard(
+                    permissionCode: 'add_members',
+                    child: ListTile(
+                      leading: Icon(Icons.person_add,
+                          color: Theme.of(context).colorScheme.secondary),
+                      title: const Text('Ajouter un Membre'),
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (context) => const AddMemberScreen(),
                           ),
                         );
                       },
