@@ -7,13 +7,43 @@ import 'package:mini_chorale_audio_player/providers/chorale_provider.dart';
 
 final supabase = Supabase.instance.client;
 
-// Provider pour les membres en attente
+// Provider pour les membres en attente (filtrés par chorale si admin)
 final pendingMembersProvider = FutureProvider.autoDispose((ref) async {
-  final response = await supabase
-      .from('membres_en_attente')
-      .select('user_id, email, full_name, telephone, created_at, statut_validation, jours_attente');
-
-  return response as List<dynamic>;
+  // Récupérer le profil de l'utilisateur connecté
+  final userId = supabase.auth.currentUser?.id;
+  if (userId == null) return [];
+  
+  final myProfile = await supabase
+      .from('profiles')
+      .select('role, chorale_id')
+      .eq('user_id', userId)
+      .single();
+  
+  final myRole = myProfile['role'] as String?;
+  final myChoraleId = myProfile['chorale_id'] as String?;
+  
+  print('👤 Validation - Mon rôle: $myRole, Ma chorale: $myChoraleId');
+  
+  // Super admin voit tous les membres en attente
+  if (myRole == 'super_admin') {
+    final response = await supabase
+        .from('membres_en_attente')
+        .select('user_id, email, full_name, telephone, created_at, statut_validation, jours_attente, chorale_id');
+    return response as List<dynamic>;
+  }
+  
+  // Admin voit uniquement les membres de sa chorale
+  if (myChoraleId != null) {
+    final response = await supabase
+        .from('profiles')
+        .select('user_id, email, full_name, telephone, created_at, statut_validation, chorale_id')
+        .eq('chorale_id', myChoraleId)
+        .eq('statut_validation', 'en_attente');
+    print('✅ ${(response as List).length} membres en attente pour ma chorale');
+    return response;
+  }
+  
+  return [];
 });
 
 class MembersValidationScreen extends ConsumerStatefulWidget {

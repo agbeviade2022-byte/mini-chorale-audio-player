@@ -16,6 +16,7 @@ class _ChoralesManagementScreenV2State extends ConsumerState<ChoralesManagementS
   List<Map<String, dynamic>> _chorales = [];
   bool _isLoading = true;
   String _searchQuery = '';
+  bool _isSuperAdmin = false;
 
   @override
   void initState() {
@@ -28,11 +29,39 @@ class _ChoralesManagementScreenV2State extends ConsumerState<ChoralesManagementS
     setState(() => _isLoading = true);
 
     try {
-      // Charger les chorales
-      final choralesData = await _supabase
-          .from('chorales')
-          .select()
-          .order('nom');
+      // 1. Récupérer le profil de l'utilisateur connecté
+      final userId = _supabase.auth.currentUser?.id;
+      if (userId == null) return;
+      
+      final myProfile = await _supabase
+          .from('profiles')
+          .select('role, chorale_id')
+          .eq('user_id', userId)
+          .single();
+      
+      final myRole = myProfile['role'] as String?;
+      final myChoraleId = myProfile['chorale_id'] as String?;
+      
+      _isSuperAdmin = myRole == 'super_admin';
+      
+      print('👤 Chorales - Mon rôle: $myRole, Ma chorale: $myChoraleId');
+      
+      // 2. Charger les chorales (filtrées si admin)
+      List<dynamic> choralesData;
+      if (_isSuperAdmin) {
+        choralesData = await _supabase
+            .from('chorales')
+            .select()
+            .order('nom');
+      } else if (myChoraleId != null) {
+        // Admin voit uniquement sa chorale
+        choralesData = await _supabase
+            .from('chorales')
+            .select()
+            .eq('id', myChoraleId);
+      } else {
+        choralesData = [];
+      }
 
       // Compter les membres pour chaque chorale
       final choralesWithCount = <Map<String, dynamic>>[];
@@ -48,7 +77,7 @@ class _ChoralesManagementScreenV2State extends ConsumerState<ChoralesManagementS
             .count();
 
         choralesWithCount.add({
-          ...chorale,
+          ...Map<String, dynamic>.from(chorale),
           'membres_count': membersCountResponse.count,
         });
       }
@@ -57,7 +86,10 @@ class _ChoralesManagementScreenV2State extends ConsumerState<ChoralesManagementS
         _chorales = choralesWithCount;
         _isLoading = false;
       });
+      
+      print('✅ ${_chorales.length} chorales chargées');
     } catch (e) {
+      print('❌ Erreur chargement chorales: $e');
       setState(() => _isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

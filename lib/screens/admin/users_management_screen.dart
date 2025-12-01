@@ -16,6 +16,8 @@ class _UsersManagementScreenState extends ConsumerState<UsersManagementScreen> {
   List<Map<String, dynamic>> _chorales = [];
   bool _isLoading = true;
   String _searchQuery = '';
+  bool _isSuperAdmin = false;
+  String? _adminChoraleId;
 
   @override
   void initState() {
@@ -28,21 +30,66 @@ class _UsersManagementScreenState extends ConsumerState<UsersManagementScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // Charger les utilisateurs avec leurs emails
-      final usersData = await _supabase.rpc('get_all_users_with_emails_debug');
+      // 1. Récupérer le profil de l'utilisateur connecté
+      final userId = _supabase.auth.currentUser?.id;
+      if (userId == null) return;
       
-      // Charger les chorales
-      final choralesData = await _supabase
-          .from('chorales')
-          .select('id, nom')
-          .order('nom');
+      final myProfile = await _supabase
+          .from('profiles')
+          .select('role, chorale_id')
+          .eq('user_id', userId)
+          .single();
+      
+      final myRole = myProfile['role'] as String?;
+      final myChoraleId = myProfile['chorale_id'] as String?;
+      
+      _isSuperAdmin = myRole == 'super_admin';
+      _adminChoraleId = myChoraleId;
+      
+      print('👤 Mon rôle: $myRole, Ma chorale: $myChoraleId');
+      
+      // 2. Charger les utilisateurs (filtrés si admin)
+      List<dynamic> usersData;
+      if (_isSuperAdmin) {
+        // Super admin voit tout
+        usersData = await _supabase.rpc('get_all_users_with_emails_debug');
+      } else if (myChoraleId != null) {
+        // Admin voit uniquement les membres de sa chorale
+        usersData = await _supabase
+            .from('profiles')
+            .select('*, chorales(nom)')
+            .eq('chorale_id', myChoraleId)
+            .order('full_name');
+      } else {
+        usersData = [];
+      }
+      
+      // 3. Charger les chorales (filtrées si admin)
+      List<dynamic> choralesData;
+      if (_isSuperAdmin) {
+        choralesData = await _supabase
+            .from('chorales')
+            .select('id, nom')
+            .order('nom');
+      } else if (myChoraleId != null) {
+        // Admin voit uniquement sa chorale
+        choralesData = await _supabase
+            .from('chorales')
+            .select('id, nom')
+            .eq('id', myChoraleId);
+      } else {
+        choralesData = [];
+      }
 
       setState(() {
         _users = List<Map<String, dynamic>>.from(usersData);
         _chorales = List<Map<String, dynamic>>.from(choralesData);
         _isLoading = false;
       });
+      
+      print('✅ ${_users.length} utilisateurs chargés, ${_chorales.length} chorales');
     } catch (e) {
+      print('❌ Erreur chargement: $e');
       setState(() => _isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
