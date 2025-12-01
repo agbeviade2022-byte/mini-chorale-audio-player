@@ -23,6 +23,7 @@ import 'package:mini_chorale_audio_player/screens/admin/chorales_management_scre
 import 'package:mini_chorale_audio_player/screens/admin/members_validation_screen.dart';
 import 'package:mini_chorale_audio_player/screens/admin/users_management_screen.dart';
 import 'package:mini_chorale_audio_player/screens/admin/add_member_screen.dart';
+import 'package:mini_chorale_audio_player/screens/settings/change_password_screen.dart';
 import 'package:mini_chorale_audio_player/providers/favorites_provider.dart';
 import 'package:mini_chorale_audio_player/providers/theme_provider.dart';
 import 'package:mini_chorale_audio_player/providers/listening_history_provider.dart';
@@ -1708,6 +1709,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             onTap: () {
               HapticFeedback.selectionClick();
               _showThemeSelector(context);
+            },
+          ),
+
+          // Modifier mot de passe
+          ListTile(
+            leading: Icon(Icons.password, color: Theme.of(context).colorScheme.primary),
+            title: const Text('Modifier mon mot de passe'),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const ChangePasswordScreen(),
+                ),
+              );
             },
           ),
 
