@@ -282,17 +282,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               labelText: 'Email',
                               prefixIcon: const Icon(Icons.email),
                               suffixIcon: _isEmailLocked 
-                                  ? IconButton(
-                                      icon: const Icon(Icons.edit, color: Colors.grey, size: 20),
-                                      tooltip: 'Modifier l\'email',
-                                      onPressed: () {
-                                        setState(() {
-                                          _emailValidated = false;
-                                          _emailChecked = false;
-                                          _passwordController.clear();
-                                        });
-                                      },
-                                    )
+                                  ? const Icon(Icons.lock, color: Colors.grey, size: 20)
                                   : null,
                               filled: _isEmailLocked,
                               fillColor: _isEmailLocked ? Colors.grey[100] : null,
