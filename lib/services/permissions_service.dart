@@ -9,15 +9,17 @@ class PermissionsService {
       final userId = _supabase.auth.currentUser?.id;
       if (userId == null) return [];
 
-      // Récupérer le profile_id depuis profiles
+      // Récupérer le rôle depuis profiles
       final profileResponse = await _supabase
           .from('profiles')
-          .select('id, role')
+          .select('user_id, role')
           .eq('user_id', userId)
           .single();
 
-      final profileId = profileResponse['id'];
+      final userIdFromProfile = profileResponse['user_id'];
       final role = profileResponse['role'];
+
+      print('🔑 Chargement permissions pour user_id: $userIdFromProfile, role: $role');
 
       // Super admin a toutes les permissions
       if (role == 'super_admin') {
@@ -29,19 +31,22 @@ class PermissionsService {
             .toList();
       }
 
-      // Appeler la fonction SQL get_user_permissions
+      // Récupérer directement depuis user_permissions
       final response = await _supabase
-          .rpc('get_user_permissions', params: {'check_user_id': profileId});
+          .from('user_permissions')
+          .select('module_code')
+          .eq('user_id', userIdFromProfile);
 
       if (response == null) return [];
 
-      // Parser le JSON retourné
-      final permissions = response as List;
-      return permissions
-          .map((p) => p['code'] as String)
+      final permissions = (response as List)
+          .map((p) => p['module_code'] as String)
           .toList();
+      
+      print('✅ Permissions trouvées: $permissions');
+      return permissions;
     } catch (e) {
-      print('Erreur lors de la récupération des permissions: $e');
+      print('❌ Erreur lors de la récupération des permissions: $e');
       return [];
     }
   }
@@ -54,23 +59,25 @@ class PermissionsService {
 
       final profileResponse = await _supabase
           .from('profiles')
-          .select('id, role')
+          .select('user_id, role')
           .eq('user_id', userId)
           .single();
 
-      final profileId = profileResponse['id'];
+      final userIdFromProfile = profileResponse['user_id'];
       final role = profileResponse['role'];
 
       // Super admin a toutes les permissions
       if (role == 'super_admin') return true;
 
-      // Appeler la fonction SQL has_permission
-      final response = await _supabase.rpc('has_permission', params: {
-        'check_user_id': profileId,
-        'permission_code': permissionCode
-      });
+      // Vérifier directement dans user_permissions
+      final response = await _supabase
+          .from('user_permissions')
+          .select('id')
+          .eq('user_id', userIdFromProfile)
+          .eq('module_code', permissionCode)
+          .maybeSingle();
 
-      return response == true;
+      return response != null;
     } catch (e) {
       print('Erreur lors de la vérification de permission: $e');
       return false;
