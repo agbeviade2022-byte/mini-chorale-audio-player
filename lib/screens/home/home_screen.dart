@@ -1588,6 +1588,25 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                     ),
                   ),
                   
+                  // Gestion des Membres (permission edit_members)
+                  PermissionGuard(
+                    permissionCode: 'edit_members',
+                    child: ListTile(
+                      leading: Icon(Icons.people,
+                          color: Theme.of(context).colorScheme.secondary),
+                      title: const Text('Gestion des Membres'),
+                      subtitle: const Text('Modifier rôles et chorales', style: TextStyle(fontSize: 12)),
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (context) => const UsersManagementScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  
                   // Gestion d'utilisateurs (Super Admin only)
                   SuperAdminGuard(
                     child: ListTile(
