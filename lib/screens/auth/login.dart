@@ -33,14 +33,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _emailChecked = false;
   bool _emailValidated = false;
   
-  /// Indique si l'email est verrouillé (pré-rempli par un admin)
-  bool get _isEmailLocked => widget.prefilledEmail != null && widget.prefilledEmail!.isNotEmpty;
+  /// Indique si l'email est verrouillé (pré-rempli par un admin OU validé)
+  bool get _isEmailLocked => 
+      (widget.prefilledEmail != null && widget.prefilledEmail!.isNotEmpty) || 
+      _emailValidated;
 
   @override
   void initState() {
     super.initState();
     // Si un email est pré-rempli, le définir et valider automatiquement
-    if (_isEmailLocked) {
+    if (widget.prefilledEmail != null && widget.prefilledEmail!.isNotEmpty) {
       _emailController.text = widget.prefilledEmail!;
       // Valider l'email automatiquement après le build
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -272,19 +274,28 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           TextFormField(
                             controller: _emailController,
                             keyboardType: TextInputType.emailAddress,
-                            readOnly: _isEmailLocked, // Verrouillé si pré-rempli
-                            enabled: !_isEmailLocked, // Grisé si pré-rempli
+                            readOnly: _isEmailLocked, // Verrouillé si validé
                             style: _isEmailLocked 
-                                ? TextStyle(color: Colors.grey[600])
+                                ? TextStyle(color: Colors.grey[700])
                                 : null,
                             decoration: InputDecoration(
                               labelText: 'Email',
                               prefixIcon: const Icon(Icons.email),
                               suffixIcon: _isEmailLocked 
-                                  ? const Icon(Icons.lock, color: Colors.grey, size: 20)
+                                  ? IconButton(
+                                      icon: const Icon(Icons.edit, color: Colors.grey, size: 20),
+                                      tooltip: 'Modifier l\'email',
+                                      onPressed: () {
+                                        setState(() {
+                                          _emailValidated = false;
+                                          _emailChecked = false;
+                                          _passwordController.clear();
+                                        });
+                                      },
+                                    )
                                   : null,
                               filled: _isEmailLocked,
-                              fillColor: _isEmailLocked ? Colors.grey[200] : null,
+                              fillColor: _isEmailLocked ? Colors.grey[100] : null,
                             ),
                             validator: (value) {
                               if (_emailError != null) {
